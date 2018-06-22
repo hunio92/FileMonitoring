@@ -9,12 +9,14 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 )
 
 type Receiver struct {
-	Ext  string `json:"ext"`
-	Port int    `json:"port"`
+	Name string   `json:"name"`
+	Port int      `json:"port"`
+	Ext  []string `json:"ext"`
 }
 
 type SendFileInfo struct {
@@ -39,20 +41,22 @@ var mapReceiver = map[string][]int{}
 func HandlerRegister(w http.ResponseWriter, r *http.Request) {
 	var rec Receiver
 	decodeJSON(r, &rec)
-	ports, ok := mapReceiver[rec.Ext]
-	if !ok {
-		ports = make([]int, 0)
+	for _, ext := range rec.Ext {
+		ports, ok := mapReceiver[ext]
+		if !ok {
+			ports = make([]int, 0)
+		}
+		ports = append(ports, rec.Port)
+		mapReceiver[ext] = ports
 	}
-	ports = append(ports, rec.Port)
-	mapReceiver[rec.Ext] = ports
-	CheckFiles()
+	checkFiles(rec.Port)
 }
 
-func CheckFiles() {
+func checkFiles(port int) {
 	files := getDirContent()
 	for _, file := range files {
 		jsonReader := fileToReader(file, false)
-		resp, err := http.Post("http://localhost:8888/"+checkfileroute, "json", jsonReader)
+		resp, err := http.Post("http://localhost:"+strconv.Itoa(port)+"/"+checkfileroute, "json", jsonReader)
 		if err != nil {
 			fmt.Printf("Could not send file info to server: %v", err)
 		}
@@ -65,10 +69,6 @@ func CheckFiles() {
 }
 
 // ************** PRIVATE FUNCIONS ************** //
-
-func getFileExtension() {
-
-}
 
 func getDirContent() []os.FileInfo {
 	files, err := ioutil.ReadDir(folderToCheck)
@@ -99,7 +99,6 @@ func fileToReader(filename os.FileInfo, addContent bool) io.Reader {
 
 func sendFile(filename os.FileInfo) *http.Response {
 	jsonReader := fileToReader(filename, true)
-	fmt.Println("")
 	resp, err := http.Post("http://localhost:8888/"+filetransfer, "json", jsonReader)
 	if err != nil {
 		fmt.Printf("Could not send the file: %v", err)

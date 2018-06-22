@@ -1,6 +1,7 @@
 package receiver
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -8,6 +9,8 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/spf13/viper"
 )
 
 // ************** DECLARATION / INITIALIZATION / CONSTS ************** //
@@ -22,6 +25,12 @@ type SendStructure struct {
 	Filename   string    `json:"filename"`
 	Content    string    `json:"content"`
 	ModifiedAt time.Time `json:"modifiedat"`
+}
+
+type ReceiverConfig struct {
+	Name string `json:"name"`
+	Ext  string `json:"ext"`
+	Port int    `json:"port"`
 }
 
 // ************** HANDLERS ************** //
@@ -69,11 +78,35 @@ func SaveFilesInfo() {
 	writeFile("filesinfo.json", jsonByte)
 }
 
-func ReadConfig() {
-
+// ReadConfig read the receiver configurations (port, name, extensions)
+func ReadConfig(configFile string) {
+	var config ReceiverConfig
+	viper.SetConfigName(configFile)
+	viper.AddConfigPath(".")
+	err := viper.ReadInConfig()
+	if err != nil {
+		fmt.Printf("Could not read config file: %v", err)
+	}
+	err = viper.Unmarshal(&config)
+	if err != nil {
+		fmt.Printf("Could not unmarshal data: %v", err)
+	}
+	postData(config)
 }
 
 // ************** PRIVATE FUNCIONS ************** //
+
+func postData(config ReceiverConfig) {
+	jsonByte, err := json.Marshal(config)
+	if err != nil {
+		fmt.Printf("Could not create JSON: %v", err)
+	}
+	jsonReader := bytes.NewReader(jsonByte)
+	_, err = http.Post("http://localhost:9999/register", "json", jsonReader)
+	if err != nil {
+		fmt.Printf("Could not send the file: %v", err)
+	}
+}
 
 func decodeMessage(msg string) ([]byte, error) {
 	buff, err := base64.StdEncoding.DecodeString(msg)

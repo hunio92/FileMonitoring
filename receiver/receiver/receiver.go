@@ -16,7 +16,7 @@ import (
 // ************** DECLARATION / INITIALIZATION / CONSTS ************** //
 
 const (
-	folderToSave = "SaveTo\\"
+	folderToSave = "SaveTo"
 	NotModified  = 888
 	Modified     = 999
 )
@@ -29,9 +29,11 @@ type SendStructure struct {
 
 type ReceiverConfig struct {
 	Name string `json:"name"`
-	Ext  string `json:"ext"`
 	Port int    `json:"port"`
+	Ext  []string `json:"ext"`
 }
+
+var Config ReceiverConfig
 
 // ************** HANDLERS ************** //
 
@@ -80,29 +82,29 @@ func SaveFilesInfo() {
 
 // ReadConfig read the receiver configurations (port, name, extensions)
 func ReadConfig(configFile string) {
-	var config ReceiverConfig
 	viper.SetConfigName(configFile)
 	viper.AddConfigPath(".")
 	err := viper.ReadInConfig()
 	if err != nil {
 		fmt.Printf("Could not read config file: %v", err)
 	}
-	err = viper.Unmarshal(&config)
-	if err != nil {
-		fmt.Printf("Could not unmarshal data: %v", err)
+	err1 := viper.Unmarshal(&Config)
+	if err1 != nil {
+		fmt.Printf("Could not unmarshal data: %v", err)  
 	}
-	postData(config)
+	fmt.Println(Config)
+	postData(Config)  
 }
 
 // ************** PRIVATE FUNCIONS ************** //
 
-func postData(config ReceiverConfig) {
-	jsonByte, err := json.Marshal(config)
+func postData(cfg ReceiverConfig) {
+	jsonByte, err := json.Marshal(cfg)
 	if err != nil {
 		fmt.Printf("Could not create JSON: %v", err)
 	}
 	jsonReader := bytes.NewReader(jsonByte)
-	_, err = http.Post("http://localhost:9999/register", "json", jsonReader)
+	_, err = http.Post("http://127.0.0.1:9999/register", "json", jsonReader)
 	if err != nil {
 		fmt.Printf("Could not send the file: %v", err)
 	}

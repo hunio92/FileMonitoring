@@ -1,5 +1,5 @@
 {
     "name":"rec1",
-    "port":7000,
+    "port":6753,
     "ext":["txt","gif"]
 }

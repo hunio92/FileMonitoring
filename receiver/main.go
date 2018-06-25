@@ -1,23 +1,36 @@
 package main
 
 import (
-	"log"
 	"FileMonitoring/receiver/receiver"
 	"flag"
+	"fmt"
+	"log"
 	"net/http"
+	"os"
 	"strconv"
 )
 
-func main() { 
+func main() {
 	var configFile string
 	flag.StringVar(&configFile, "cf", "", "Choose Config File")
 	flag.Parse()
 
-	receiver.SaveFilesInfo()
-	receiver.ReadConfig(configFile)
-	
-	http.HandleFunc("/checkfile", receiver.HandlerCheckFile)
-	http.HandleFunc("/filetransfer", receiver.HandlerFileTransfer)
-	port := strconv.Itoa(receiver.Config.Port)
-	log.Println(http.ListenAndServe(":"+port, nil))
+	if configFile != "" {
+		defer receiver.SaveFilesInfo()
+
+		_, err := os.Stat("filesinfo.json")
+		if err != nil {
+			receiver.SaveFilesInfo()
+		}
+
+		receiver.ReadConfig(configFile)
+		go receiver.PostData()
+
+		http.HandleFunc("/checkfile", receiver.HandlerCheckFile)
+		http.HandleFunc("/filetransfer", receiver.HandlerFileTransfer)
+		port := strconv.Itoa(receiver.Config.Port)
+		log.Println(http.ListenAndServe(":"+port, nil))
+	} else {
+		fmt.Println("Please select config file !")
+	}
 }

@@ -6,6 +6,7 @@ import (
 )
 
 func main() {
+	sender.StoreFilesInfo()
 	http.HandleFunc("/register", sender.HandlerRegister)
-	http.ListenAndServe(":9999", nil)
+	http.ListenAndServe(":8080", nil)
 }

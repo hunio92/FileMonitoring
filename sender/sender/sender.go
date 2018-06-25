@@ -25,12 +25,14 @@ type SendFileInfo struct {
 	ModifiedAt time.Time `json:"modifiedat"`
 }
 
+type mapFile map[string]SendFileInfo
+
+var fileMap mapFile
+
 const (
-	folderToCheck  = "ToCheck"
+	folderToCheck  = "ToCheck/"
 	checkfileroute = "checkfile"
 	filetransfer   = "filetransfer"
-	NotModified    = 888
-	Modified       = 999
 )
 
 var mapReceiver = map[string][]int{}
@@ -47,25 +49,39 @@ func HandlerRegister(w http.ResponseWriter, r *http.Request) {
 			ports = make([]int, 0)
 		}
 		ports = append(ports, rec.Port)
-		mapReceiver[ext] = ports 
+		mapReceiver[ext] = ports
 	}
-	checkFiles(rec.Port)
+	strPort := strconv.Itoa(rec.Port)
+	checkFiles(strPort)
 }
 
-func checkFiles(port int) {
-	strPort := strconv.Itoa(port)
+// StoreFilesInfo store the current files info (name, last time modified)
+func StoreFilesInfo() {
+	fileMap = make(mapFile)
+	files := getDirContent()
+	for _, filename := range files {
+		fileMap[filename.Name()] = SendFileInfo{Filename: filename.Name(), ModifiedAt: filename.ModTime()}
+	}
+}
+
+func checkFiles(port string) {
 	files := getDirContent()
 	for _, file := range files {
 		jsonReader := fileToReader(file, false)
-		_, err := http.Post("http://127.0.0.1:"+strPort+"/"+checkfileroute, "json", jsonReader)
+		resp, err := http.Post("http://127.0.0.1:"+port+"/"+checkfileroute, "json", jsonReader)
 		if err != nil {
 			fmt.Printf("Could not send file info to server: %v", err)
 		}
 
-		// if resp.StatusCode == Modified {
-		// 	sendFile(file)
-		// }
-		// fmt.Printf("file: %v, resp: %v\n", file.Name(), resp.StatusCode)
+		if resp.StatusCode == http.StatusNotFound {
+			sendFile(port, file)
+		}
+		fmt.Printf("file: %v, resp: %v\n", file.Name(), resp.StatusCode)
+
+		for {
+			checkModified(port)
+			time.Sleep(3 * time.Second)
+		}
 	}
 }
 
@@ -98,14 +114,12 @@ func fileToReader(filename os.FileInfo, addContent bool) io.Reader {
 	return jsonReader
 }
 
-func sendFile(filename os.FileInfo) *http.Response {
+func sendFile(port string, filename os.FileInfo) {
 	jsonReader := fileToReader(filename, true)
-	resp, err := http.Post("http://127.0.0.1:8888/"+filetransfer, "json", jsonReader)
+	_, err := http.Post("http://127.0.0.1:"+port+"/"+filetransfer, "json", jsonReader)
 	if err != nil {
 		fmt.Printf("Could not send the file: %v", err)
 	}
-
-	return resp
 }
 
 func decodeJSON(r *http.Request, container interface{}) {
@@ -115,4 +129,14 @@ func decodeJSON(r *http.Request, container interface{}) {
 		fmt.Printf("Failed to decode the file: %v", err)
 	}
 	defer r.Body.Close()
+}
+
+func checkModified(port string) {
+	files := getDirContent()
+	for _, file := range files {
+		if fileMap[file.Name()].ModifiedAt != file.ModTime() {
+			sendFile(port, file)
+			fileMap[file.Name()] = SendFileInfo{ModifiedAt: file.ModTime()}
+		}
+	}
 }

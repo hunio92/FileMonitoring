@@ -16,9 +16,7 @@ import (
 // ************** DECLARATION / INITIALIZATION / CONSTS ************** //
 
 const (
-	folderToSave = "SaveTo"
-	NotModified  = 888
-	Modified     = 999
+	folderToSave = "SaveTo/"
 )
 
 type SendStructure struct {
@@ -28,8 +26,8 @@ type SendStructure struct {
 }
 
 type ReceiverConfig struct {
-	Name string `json:"name"`
-	Port int    `json:"port"`
+	Name string   `json:"name"`
+	Port int      `json:"port"`
 	Ext  []string `json:"ext"`
 }
 
@@ -41,15 +39,14 @@ var Config ReceiverConfig
 func HandlerCheckFile(w http.ResponseWriter, r *http.Request) {
 	var fileInfo SendStructure
 	decodeJSON(r, &fileInfo)
-	fmt.Println(fileInfo)
 	info := getFilesInfo()
 	for _, file := range info {
 		if fileInfo.Filename == file.Filename && fileInfo.ModifiedAt == file.ModifiedAt {
-			w.WriteHeader(NotModified)
+			w.WriteHeader(http.StatusOK)
 			return
 		}
 	}
-	w.WriteHeader(Modified)
+	w.WriteHeader(http.StatusNotFound)
 }
 
 // HandlerSaveFile get file and save
@@ -90,21 +87,19 @@ func ReadConfig(configFile string) {
 	}
 	err1 := viper.Unmarshal(&Config)
 	if err1 != nil {
-		fmt.Printf("Could not unmarshal data: %v", err)  
+		fmt.Printf("Could not unmarshal data: %v", err)
 	}
-	fmt.Println(Config)
-	postData(Config)  
 }
 
 // ************** PRIVATE FUNCIONS ************** //
 
-func postData(cfg ReceiverConfig) {
-	jsonByte, err := json.Marshal(cfg)
+func PostData() {
+	jsonByte, err := json.Marshal(Config)
 	if err != nil {
 		fmt.Printf("Could not create JSON: %v", err)
 	}
 	jsonReader := bytes.NewReader(jsonByte)
-	_, err = http.Post("http://127.0.0.1:9999/register", "json", jsonReader)
+	_, err = http.Post("http://127.0.0.1:8080/register", "json", jsonReader)
 	if err != nil {
 		fmt.Printf("Could not send the file: %v", err)
 	}
@@ -125,7 +120,6 @@ func decodeJSON(r *http.Request, container interface{}) {
 		fmt.Printf("Failed to decode the file: %v", err)
 	}
 	defer r.Body.Close()
-	fmt.Println(container)
 }
 
 func getFilesInfo() (filesInfo []SendStructure) {

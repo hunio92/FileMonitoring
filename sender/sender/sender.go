@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -51,8 +52,8 @@ func HandlerRegister(w http.ResponseWriter, r *http.Request) {
 		ports = append(ports, rec.Port)
 		mapReceiver[ext] = ports
 	}
-	strPort := strconv.Itoa(rec.Port)
-	checkFiles(strPort)
+	ReceiverPort := strconv.Itoa(rec.Port)
+	checkFiles(ReceiverPort)
 }
 
 // StoreFilesInfo store the current files info (name, last time modified)
@@ -64,24 +65,31 @@ func StoreFilesInfo() {
 	}
 }
 
-func checkFiles(port string) {
+func checkFiles(ReceiverPort string) {
 	files := getDirContent()
+	fmt.Println(mapReceiver)
 	for _, file := range files {
-		jsonReader := fileToReader(file, false)
-		resp, err := http.Post("http://127.0.0.1:"+port+"/"+checkfileroute, "json", jsonReader)
-		if err != nil {
-			fmt.Printf("Could not send file info to server: %v", err)
-		}
+		filename := file.Name()
+		index := strings.Index(filename, ".")
+		ports := mapReceiver[filename[index+1:]]
+		for _, port := range ports {
+			portStr := strconv.Itoa(port)
+			jsonReader := fileToReader(file, false)
+			resp, err := http.Post("http://127.0.0.1:"+portStr+"/"+checkfileroute, "json", jsonReader)
+			if err != nil {
+				fmt.Printf("Could not send file info to server: %v", err)
+			}
 
-		if resp.StatusCode == http.StatusNotFound {
-			sendFile(port, file)
+			if resp.StatusCode == http.StatusNotFound {
+				sendFile(portStr, file)
+			}
+			fmt.Printf("file: %v, resp: %v\n", file.Name(), resp.StatusCode)
 		}
-		fmt.Printf("file: %v, resp: %v\n", file.Name(), resp.StatusCode)
+	}
 
-		for {
-			checkModified(port)
-			time.Sleep(3 * time.Second)
-		}
+	for {
+		checkModified(ReceiverPort)
+		time.Sleep(3 * time.Second)
 	}
 }
 

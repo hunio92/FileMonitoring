@@ -12,5 +12,6 @@
 *.out
 
 # Files not needed
-receiver/SaveTo
+receiver/FilesInfo
+receiver/rec[0-9]
 sender/ToCheck

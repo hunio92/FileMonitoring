@@ -15,10 +15,6 @@ import (
 
 // ************** DECLARATION / INITIALIZATION / CONSTS ************** //
 
-const (
-	folderToSave = "SaveTo/"
-)
-
 type SendStructure struct {
 	Filename   string    `json:"filename"`
 	Content    string    `json:"content"`
@@ -31,7 +27,8 @@ type ReceiverConfig struct {
 	Ext  []string `json:"ext"`
 }
 
-var Config ReceiverConfig
+var config ReceiverConfig
+var receiverFolder = "DefaultPath/"
 
 // ************** HANDLERS ************** //
 
@@ -46,10 +43,11 @@ func HandlerCheckFile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// fmt.Println("")
 	w.WriteHeader(http.StatusNotFound)
 }
 
-// HandlerSaveFile get file and save
+// HandlerFileTransfer get file from sender and save
 func HandlerFileTransfer(w http.ResponseWriter, r *http.Request) {
 	var fileInfo SendStructure
 	decodeJSON(r, &fileInfo)
@@ -57,16 +55,19 @@ func HandlerFileTransfer(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fmt.Printf("Could not decode the base64 message: %v", err)
 	}
-
-	writeFile(folderToSave+fileInfo.Filename, msg)
+	writeFile(receiverFolder+fileInfo.Filename, msg)
+	err = os.Chtimes(receiverFolder+fileInfo.Filename, time.Now(), fileInfo.ModifiedAt)
+	if err != nil {
+		fmt.Printf("Could not change the last time modified field: %v", err)
+	}
 }
 
 // ************** PUBLIC FUNCIONS ************** //
 
 // SaveFilesInfo create json file and saves the files info (name, last modified)
-func SaveFilesInfo() {
+func SaveFilesInfo(receiverName string) {
 	jsonStruct := make([]SendStructure, 0)
-	files := getDirContent(folderToSave)
+	files := getDirContent(receiverName + "/")
 	for _, filename := range files {
 		jsonStruct = append(jsonStruct, SendStructure{Filename: filename.Name(), ModifiedAt: filename.ModTime()})
 	}
@@ -74,27 +75,44 @@ func SaveFilesInfo() {
 	if err != nil {
 		fmt.Printf("Could not create JSON: %v", err)
 	}
-	writeFile("filesinfo.json", jsonByte)
+	writeFile("FilesInfo/"+receiverName+".json", jsonByte)
 }
 
 // ReadConfig read the receiver configurations (port, name, extensions)
-func ReadConfig(configFile string) {
+func ReadConfig(configFile string) string {
 	viper.SetConfigName(configFile)
-	viper.AddConfigPath(".")
+	viper.AddConfigPath("./ReceiverConfig/")
 	err := viper.ReadInConfig()
 	if err != nil {
 		fmt.Printf("Could not read config file: %v", err)
 	}
-	err1 := viper.Unmarshal(&Config)
+	err1 := viper.Unmarshal(&config)
 	if err1 != nil {
 		fmt.Printf("Could not unmarshal data: %v", err)
 	}
+
+	SetConfig(config)
+	receiverFolder = config.Name + "/"
+	_, err = os.Stat(receiverFolder)
+	if err != nil {
+		os.Mkdir(receiverFolder, 0600)
+	}
+
+	return config.Name
+}
+
+func SetConfig(cfg ReceiverConfig) {
+	config = cfg
+}
+
+func GetConfig() ReceiverConfig {
+	return config
 }
 
 // ************** PRIVATE FUNCIONS ************** //
 
 func PostData() {
-	jsonByte, err := json.Marshal(Config)
+	jsonByte, err := json.Marshal(config)
 	if err != nil {
 		fmt.Printf("Could not create JSON: %v", err)
 	}
@@ -123,7 +141,7 @@ func decodeJSON(r *http.Request, container interface{}) {
 }
 
 func getFilesInfo() (filesInfo []SendStructure) {
-	raw, err := ioutil.ReadFile("filesinfo.json")
+	raw, err := ioutil.ReadFile("FilesInfo/" + config.Name + ".json")
 	if err != nil {
 		fmt.Printf("Could not read json file: %q \n", raw)
 	}
@@ -147,4 +165,5 @@ func writeFile(filename string, msg []byte) {
 	if err != nil {
 		fmt.Printf("Could not write to file: %v", err)
 	}
+
 }

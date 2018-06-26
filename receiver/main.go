@@ -7,30 +7,45 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
 )
 
+// ToDo: 1. BAD FILE TRANSFER: last mofidied not match ! //****// 2. send file by extension
+
 func main() {
 	var configFile string
-	flag.StringVar(&configFile, "cf", "", "Choose Config File")
+	flag.StringVar(&configFile, "cf", "", "Enter Config File")
 	flag.Parse()
 
 	if configFile != "" {
-		defer receiver.SaveFilesInfo()
+		recName := receiver.ReadConfig(configFile)
 
-		_, err := os.Stat("filesinfo.json")
+		c := waitForSignal()
+		go func() {
+			<-c // If get anything
+			receiver.SaveFilesInfo(recName)
+			os.Exit(3)
+		}()
+
+		_, err := os.Stat("FilesInfo/" + recName + ".json")
 		if err != nil {
-			receiver.SaveFilesInfo()
+			receiver.SaveFilesInfo(recName)
 		}
 
-		receiver.ReadConfig(configFile)
 		go receiver.PostData()
 
 		http.HandleFunc("/checkfile", receiver.HandlerCheckFile)
 		http.HandleFunc("/filetransfer", receiver.HandlerFileTransfer)
-		port := strconv.Itoa(receiver.Config.Port)
+		port := strconv.Itoa(receiver.GetConfig().Port)
 		log.Println(http.ListenAndServe(":"+port, nil))
 	} else {
 		fmt.Println("Please select config file !")
 	}
+}
+
+func waitForSignal() chan os.Signal {
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, os.Kill)
+	return c
 }

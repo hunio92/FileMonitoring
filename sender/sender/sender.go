@@ -31,12 +31,13 @@ type mapFile map[string]SendFileInfo
 var fileMap mapFile
 
 const (
-	folderToCheck  = "ToCheck/"
-	checkfileroute = "checkfile"
-	filetransfer   = "filetransfer"
+	folderToCheck     = "ToCheck/"
+	checkFileRoute    = "checkfile"
+	fileTransferRoute = "filetransfer"
 )
 
 var mapReceiver = map[string][]int{}
+var errorCounter = map[string]int{}
 
 // ************** HANDLERS ************** //
 
@@ -53,6 +54,7 @@ func HandlerRegister(w http.ResponseWriter, r *http.Request) {
 		mapReceiver[ext] = ports
 	}
 	ReceiverPort := strconv.Itoa(rec.Port)
+	fmt.Println(mapReceiver)
 	checkFiles(ReceiverPort)
 }
 
@@ -74,14 +76,13 @@ func checkFiles(ReceiverPort string) {
 		for _, port := range ports {
 			portStr := strconv.Itoa(port)
 			if portStr == ReceiverPort {
-				jsonData := fileToReader(file, false)
-				resp := sendFile(portStr, checkfileroute, jsonData)
-
-				if resp.StatusCode == http.StatusNotFound {
-					jsonData := fileToReader(file, true)
-					sendFile(ReceiverPort, filetransfer, jsonData)
+				resp := isModified(portStr, file)
+				if !resp {
+					errorCounter[portStr]++
+					fmt.Println("error counter: ", errorCounter)
 				}
-				fmt.Printf("file: %v, resp: %v\n", file.Name(), resp.StatusCode)
+
+				fmt.Printf("file: %v\n", file.Name())
 			}
 		}
 	}
@@ -95,6 +96,39 @@ func checkFiles(ReceiverPort string) {
 	}
 }
 
+// ************** PUBLIC FUNCIONS ************** //
+
+func CheckConnection() {
+	var portToDelete int
+	for {
+		portToDelete = 0
+		for k, v := range errorCounter {
+			if v > 3 {
+				fmt.Printf("The port: %v, failed: %v times \n", k, v)
+				val, err := strconv.Atoi(k)
+				if err != nil {
+					fmt.Printf("Could not convert string to int: %v\n", err)
+				}
+				portToDelete = val
+			}
+		}
+		for k, v := range mapReceiver {
+			a := v
+			i := 0
+			for i < len(a) {
+				if a[i] == portToDelete {
+					a = append(a[:i], a[i+1:]...)
+					mapReceiver[k] = a
+				}
+				i++
+			}
+		}
+
+		delete(errorCounter, strconv.Itoa(portToDelete))
+		time.Sleep(5 * time.Second)
+	}
+}
+
 // ************** PRIVATE FUNCIONS ************** //
 
 func checkModified(file os.FileInfo) {
@@ -104,9 +138,12 @@ func checkModified(file os.FileInfo) {
 	for _, port := range ports {
 		portStr := strconv.Itoa(port)
 		if fileMap[file.Name()].ModifiedAt != file.ModTime() {
-			fmt.Printf("file: %v, port: %v", file.Name(), portStr)
-			jsonReader := fileToReader(file, true)
-			sendFile(portStr, filetransfer, jsonReader)
+			fmt.Printf("file: %v, port: %v\n", file.Name(), portStr)
+			resp := sendFile(portStr, file)
+			if !resp {
+				errorCounter[portStr]++
+				fmt.Println("error counter: ", errorCounter)
+			}
 		}
 	}
 	fileMap[file.Name()] = SendFileInfo{ModifiedAt: file.ModTime()}
@@ -139,16 +176,38 @@ func fileToReader(filename os.FileInfo, addContent bool) io.Reader {
 	return jsonReader
 }
 
-func sendFile(port string, route string, jsonData io.Reader) *http.Response {
+func isModified(port string, file os.FileInfo) bool {
 	timeout := time.Duration(5 * time.Second)
 	client := http.Client{
 		Timeout: timeout,
 	}
-	resp, err := client.Post("http://127.0.0.1:"+port+"/"+route, "json", jsonData)
+	jsonData := fileToReader(file, false)
+	resp, err := client.Post("http://127.0.0.1:"+port+"/"+checkFileRoute, "json", jsonData)
 	if err != nil {
-		fmt.Printf("Could not send the file: %v", err)
+		return false
 	}
-	return resp
+
+	if resp.StatusCode != http.StatusOK {
+		notErr := sendFile(port, file)
+		if !notErr {
+			return false
+		}
+	}
+
+	return true
+}
+
+func sendFile(port string, file os.FileInfo) bool {
+	timeout := time.Duration(5 * time.Second)
+	client := http.Client{
+		Timeout: timeout,
+	}
+	jsonData := fileToReader(file, true)
+	_, err := client.Post("http://127.0.0.1:"+port+"/"+fileTransferRoute, "json", jsonData)
+	if err != nil {
+		return false
+	}
+	return true
 }
 
 func decodeJSON(r *http.Request, container interface{}) {

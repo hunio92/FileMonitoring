@@ -14,6 +14,10 @@ import (
 	"time"
 )
 
+type Keys struct {
+	keys []string `json:keys`
+}
+
 type Receiver struct {
 	Name string   `json:"name"`
 	Port int      `json:"port"`
@@ -43,6 +47,11 @@ var errorCounter = map[string]int{}
 
 // HandlerRegister register receivers ports and file extension
 func HandlerRegister(w http.ResponseWriter, r *http.Request) {
+	key := r.Header.Get("authkey")
+	fmt.Println("authkey: ", key)
+
+	// var authKeys Keys
+
 	var rec Receiver
 	decodeJSON(r, &rec)
 	for _, ext := range rec.Ext {
@@ -56,44 +65,6 @@ func HandlerRegister(w http.ResponseWriter, r *http.Request) {
 	ReceiverPort := strconv.Itoa(rec.Port)
 	fmt.Println(mapReceiver)
 	checkFiles(ReceiverPort)
-}
-
-// StoreFilesInfo store the current files info (name, last time modified)
-func StoreFilesInfo() {
-	fileMap = make(mapFile)
-	files := getDirContent()
-	for _, filename := range files {
-		fileMap[filename.Name()] = SendFileInfo{Filename: filename.Name(), ModifiedAt: filename.ModTime()}
-	}
-}
-
-func checkFiles(ReceiverPort string) {
-	files := getDirContent()
-	for _, file := range files {
-		filename := file.Name()
-		index := strings.Index(filename, ".")
-		ports := mapReceiver[filename[index+1:]]
-		for _, port := range ports {
-			portStr := strconv.Itoa(port)
-			if portStr == ReceiverPort {
-				resp := isModified(portStr, file)
-				if !resp {
-					errorCounter[portStr]++
-					fmt.Println("error counter: ", errorCounter)
-				}
-
-				fmt.Printf("file: %v\n", file.Name())
-			}
-		}
-	}
-
-	for {
-		files := getDirContent()
-		for _, file := range files {
-			checkModified(file)
-		}
-		time.Sleep(3 * time.Second)
-	}
 }
 
 // ************** PUBLIC FUNCIONS ************** //
@@ -129,16 +100,56 @@ func CheckConnection() {
 	}
 }
 
+// StoreFilesInfo store the current files info (name, last time modified)
+func StoreFilesInfo() {
+	fileMap = make(mapFile)
+	files := getDirContent()
+	for _, filename := range files {
+		fileMap[filename.Name()] = SendFileInfo{Filename: filename.Name(), ModifiedAt: filename.ModTime()}
+	}
+}
+
 // ************** PRIVATE FUNCIONS ************** //
 
+func checkFiles(ReceiverPort string) {
+	files := getDirContent()
+	for _, file := range files {
+		filename := file.Name()
+		index := strings.Index(filename, ".")
+		ports := mapReceiver[filename[index+1:]]
+		for _, port := range ports {
+			portStr := strconv.Itoa(port)
+			if portStr == ReceiverPort {
+				resp := isModified(portStr, file)
+				if !resp {
+					errorCounter[portStr]++
+					fmt.Println("error counter: ", errorCounter)
+				}
+
+				fmt.Printf("file: %v\n", file.Name())
+			}
+		}
+	}
+
+	go func() {
+		for {
+			files := getDirContent()
+			for _, file := range files {
+				checkModified(file)
+			}
+			time.Sleep(3 * time.Second)
+		}
+	}()
+}
+
 func checkModified(file os.FileInfo) {
-	filename := file.Name()
-	index := strings.Index(filename, ".")
-	ports := mapReceiver[filename[index+1:]]
+	fileName := file.Name()
+	index := strings.Index(fileName, ".")
+	ports := mapReceiver[fileName[index+1:]]
 	for _, port := range ports {
 		portStr := strconv.Itoa(port)
-		if fileMap[file.Name()].ModifiedAt != file.ModTime() {
-			fmt.Printf("file: %v, port: %v\n", file.Name(), portStr)
+		if fileMap[fileName].ModifiedAt != file.ModTime() {
+			fmt.Printf("file: %v, port: %v, pid: %v\n", fileName, portStr, os.Getegid())
 			resp := sendFile(portStr, file)
 			if !resp {
 				errorCounter[portStr]++
@@ -146,7 +157,7 @@ func checkModified(file os.FileInfo) {
 			}
 		}
 	}
-	fileMap[file.Name()] = SendFileInfo{ModifiedAt: file.ModTime()}
+	fileMap[fileName] = SendFileInfo{ModifiedAt: file.ModTime()}
 }
 
 func getDirContent() []os.FileInfo {
@@ -190,10 +201,10 @@ func isModified(port string, file os.FileInfo) bool {
 	if resp.StatusCode != http.StatusOK {
 		notErr := sendFile(port, file)
 		if !notErr {
+			fmt.Println("ALO")
 			return false
 		}
 	}
-
 	return true
 }
 

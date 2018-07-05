@@ -39,6 +39,7 @@ func main() {
 		http.HandleFunc("/filetransfer", receiver.HandlerFileTransfer)
 		port := strconv.Itoa(receiver.GetConfig().Port)
 		log.Println(http.ListenAndServe(":"+port, nil))
+
 	} else {
 		fmt.Println("Please select config file !")
 	}

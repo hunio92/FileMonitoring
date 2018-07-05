@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/viper"
 )
 
+// TestETCDOutage
 // ************** DECLARATION / INITIALIZATION / CONSTS ************** //
 
 type SendStructure struct {
@@ -25,6 +26,7 @@ type ReceiverConfig struct {
 	Name string   `json:"name"`
 	Port int      `json:"port"`
 	Ext  []string `json:"ext"`
+	Key  string   `json:"key"`
 }
 
 var config ReceiverConfig
@@ -64,6 +66,32 @@ func HandlerFileTransfer(w http.ResponseWriter, r *http.Request) {
 
 // ************** PUBLIC FUNCIONS ************** //
 
+func PostData() {
+	jsonByte, err := json.Marshal(config)
+	if err != nil {
+		fmt.Printf("Could not create JSON: %v", err)
+	}
+
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+	jsonReader := bytes.NewReader(jsonByte)
+	req, err := http.NewRequest("POST", "http://127.0.0.1:8080/register", jsonReader)
+	if err != nil {
+		fmt.Printf("Could not create the request: %v", err)
+	}
+
+	req.Header.Set("authkey", config.Key)
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Printf("Could not send auth data: %v", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		fmt.Printf("Could not auth: %v", resp)
+	}
+}
+
 // SaveFilesInfo create json file and saves the files info (name, last modified)
 func SaveFilesInfo(receiverName string) {
 	jsonStruct := make([]SendStructure, 0)
@@ -91,7 +119,7 @@ func ReadConfig(configFile string) string {
 		fmt.Printf("Could not unmarshal data: %v", err)
 	}
 
-	SetConfig(config)
+	fmt.Println(config)
 	receiverFolder = config.Name + "/"
 	_, err = os.Stat(receiverFolder)
 	if err != nil {
@@ -101,27 +129,11 @@ func ReadConfig(configFile string) string {
 	return config.Name
 }
 
-func SetConfig(cfg ReceiverConfig) {
-	config = cfg
-}
-
 func GetConfig() ReceiverConfig {
 	return config
 }
 
 // ************** PRIVATE FUNCIONS ************** //
-
-func PostData() {
-	jsonByte, err := json.Marshal(config)
-	if err != nil {
-		fmt.Printf("Could not create JSON: %v", err)
-	}
-	jsonReader := bytes.NewReader(jsonByte)
-	_, err = http.Post("http://127.0.0.1:8080/register", "json", jsonReader)
-	if err != nil {
-		fmt.Printf("Could not send the file: %v", err)
-	}
-}
 
 func decodeMessage(msg string) ([]byte, error) {
 	buff, err := base64.StdEncoding.DecodeString(msg)

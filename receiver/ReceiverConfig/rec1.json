@@ -1,5 +1,6 @@
 {
     "name":"rec1",
     "port":8081,
-    "ext":["txt","asd"]
+    "ext":["txt","asd"],
+    "key":"AuthKey1"
 }

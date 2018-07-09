@@ -2,5 +2,6 @@
     "name":"rec2",
     "port":8082,
     "ext":["wow"],
-    "key":"AuthKey2"
+    "key":"AuthKey2",
+    "senderkey": "SenderKey2"
 }

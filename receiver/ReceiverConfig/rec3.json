@@ -2,5 +2,6 @@
     "name":"rec3",
     "port":8083,
     "ext":["wow", "txt", "asd"],
-    "key":"AuthKey3"
+    "key":"AuthKey3",
+    "senderkey": "SenderKey3"
 }

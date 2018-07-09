@@ -20,13 +20,15 @@ type SendStructure struct {
 	Filename   string    `json:"filename"`
 	Content    string    `json:"content"`
 	ModifiedAt time.Time `json:"modifiedat"`
+	SenderKey  string    `json:"senderkey"`
 }
 
 type ReceiverConfig struct {
-	Name string   `json:"name"`
-	Port int      `json:"port"`
-	Ext  []string `json:"ext"`
-	Key  string   `json:"key"`
+	Name      string   `json:"name"`
+	Port      int      `json:"port"`
+	Ext       []string `json:"ext"`
+	Key       string   `json:"key"`
+	Senderkey string   `json:"senderkey"`
 }
 
 var config ReceiverConfig
@@ -53,14 +55,19 @@ func HandlerCheckFile(w http.ResponseWriter, r *http.Request) {
 func HandlerFileTransfer(w http.ResponseWriter, r *http.Request) {
 	var fileInfo SendStructure
 	decodeJSON(r, &fileInfo)
-	msg, err := decodeMessage(fileInfo.Content)
-	if err != nil {
-		fmt.Printf("Could not decode the base64 message: %v", err)
-	}
-	writeFile(receiverFolder+fileInfo.Filename, msg)
-	err = os.Chtimes(receiverFolder+fileInfo.Filename, time.Now(), fileInfo.ModifiedAt)
-	if err != nil {
-		fmt.Printf("Could not change the last time modified field: %v", err)
+	fmt.Printf("senderkey: %v , receveerkey: %v \n", fileInfo.SenderKey, config.Senderkey)
+	if fileInfo.SenderKey == config.Senderkey {
+		msg, err := decodeMessage(fileInfo.Content)
+		if err != nil {
+			fmt.Printf("Could not decode the base64 message: %v", err)
+		}
+		writeFile(receiverFolder+fileInfo.Filename, msg)
+		err = os.Chtimes(receiverFolder+fileInfo.Filename, time.Now(), fileInfo.ModifiedAt)
+		if err != nil {
+			fmt.Printf("Could not change the last time modified field: %v", err)
+		}
+	} else {
+		w.WriteHeader(http.StatusNotFound)
 	}
 }
 
@@ -116,7 +123,7 @@ func ReadConfig(configFile string) string {
 	}
 	err1 := viper.Unmarshal(&config)
 	if err1 != nil {
-		fmt.Printf("Could not unmarshal data: %v", err)
+		fmt.Printf("Could not unmarshal data: %v", err1)
 	}
 
 	fmt.Println(config)

@@ -128,7 +128,6 @@ func checkFiles(ReceiverPort string) {
 					fmt.Println("error counter: ", errorCounter)
 				}
 
-				fmt.Printf("file: %v\n", file.Name())
 			}
 		}
 	}
@@ -196,7 +195,8 @@ func isModified(port string, file os.FileInfo) bool {
 	resp, _ := sendFile(port, checkFileRoute, file, false)
 
 	if resp.StatusCode != http.StatusOK {
-		_, isSent := sendFile(port, fileTransferRoute, file, true)
+		fmt.Printf("file: %v\n", file.Name())
+		resp, isSent := sendFile(port, fileTransferRoute, file, true)
 		if !isSent {
 			return false
 		}
@@ -214,7 +214,7 @@ func sendFile(port string, route string, file os.FileInfo, addContent bool) (*ht
 	}
 	intPort, _ := strconv.Atoi(port)
 	jsonData := fileToReader(file, fileAuthKey[intPort], addContent)
-	resp, err := client.Post("http://127.0.0.1:"+port+"/"+fileTransferRoute, "json", jsonData)
+	resp, err := client.Post("http://127.0.0.1:"+port+"/"+route, "json", jsonData)
 	if err != nil {
 		return resp, false
 	}

@@ -47,7 +47,6 @@ func HandlerCheckFile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	// fmt.Println("")
 	w.WriteHeader(http.StatusNotFound)
 }
 
@@ -66,6 +65,7 @@ func HandlerFileTransfer(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			fmt.Printf("Could not change the last time modified field: %v", err)
 		}
+		w.WriteHeader(http.StatusOK)
 	} else {
 		w.WriteHeader(http.StatusNotFound)
 	}
